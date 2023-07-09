@@ -2,7 +2,7 @@ import { FC, PropsWithChildren, useEffect, useMemo, useState } from 'react'
 import { GasPrice, SigningStargateClient } from '@cosmjs/stargate'
 import { useChain } from '@cosmos-kit/react'
 import { chainName } from '../config'
-import { AMINO_TYPES, REGISTRY } from './TemplClientProvider'
+import { AMINO_TYPES, JUNO_GAS_PRICE, REGISTRY } from './TemplClientProvider'
 import { ExtendedHttpEndpoint } from '@cosmos-kit/core/types/types/manager'
 import createContext from '../utils/createContext'
 
@@ -42,9 +42,10 @@ const WalletProvider: FC<PropsWithChildren> = ({ children }) => {
           // @ts-ignore
           registry: REGISTRY,
           aminoTypes: AMINO_TYPES,
-          gasPrice: GasPrice.fromString('0.0025ujuno'),
+          gasPrice: JUNO_GAS_PRICE
         },
       ))
+
     })()
   }, [getOfflineSigner, getRpcEndpoint, signingClient])
 

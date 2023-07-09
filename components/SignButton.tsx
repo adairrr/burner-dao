@@ -1,30 +1,19 @@
 import React, { FC, useEffect, useState } from 'react'
 import { Button, HStack, Text, VStack } from '@chakra-ui/react'
-import { useChain } from '@cosmos-kit/react'
-import useTempClient, { AMINO_TYPES, REGISTRY } from './TemplClientProvider'
-import { MsgExec, MsgGrant, MsgRevoke } from 'cosmjs-types/cosmos/authz/v1beta1/tx'
-import { chainName } from '../config'
+import useTempClient from './TemplClientProvider'
+import { MsgExec, MsgGrant } from 'cosmjs-types/cosmos/authz/v1beta1/tx'
 import { GenericAuthorization, Grant } from 'cosmjs-types/cosmos/authz/v1beta1/authz'
-import { Registry } from 'cosmwasm'
-import {
-  AminoTypes,
-  Coin,
-  GasPrice,
-  QueryClient,
-  setupAuthzExtension,
-  SigningStargateClient,
-} from '@cosmjs/stargate'
+import { Coin, QueryClient, setupAuthzExtension } from '@cosmjs/stargate'
 import { MsgSend } from 'cosmjs-types/cosmos/bank/v1beta1/tx'
 import { Tendermint34Client } from '@cosmjs/tendermint-rpc'
 import { AuthzExtension } from '@cosmjs/stargate/build/modules/authz/queries'
 import { Json } from './JSON'
-import { MsgGrantAllowance, MsgGrantAllowanceResponse } from 'cosmjs-types/cosmos/feegrant/v1beta1/tx'
+import { MsgGrantAllowance } from 'cosmjs-types/cosmos/feegrant/v1beta1/tx'
 import { BasicAllowance } from 'cosmjs-types/cosmos/feegrant/v1beta1/feegrant'
 import { Timestamp } from 'cosmjs-types/google/protobuf/timestamp'
 import { TRANSACTION_TYPE_ENUM } from '../utils/transactionTypes'
-import { createAuthzAminoConverters } from '../utils/amino/authz'
-import { createFeegrantAminoConverters } from '../utils/amino/feegrant'
 import useWallet from './WalletContext'
+import { SendAuthorization } from 'cosmjs-types/cosmos/bank/v1beta1/authz'
 
 interface SignButtonProps {
 
@@ -66,7 +55,7 @@ const grantedMsg = '/cosmos.distribution.v1beta1.MsgWithdrawDelegatorReward'
 
 
 export const SignButton: FC<SignButtonProps> = () => {
-  const { signingClient, rpcEndpoint, address, isWalletConnected, connect } = useWallet()
+  const {signingClient, rpcEndpoint, address, isWalletConnected, connect} = useWallet()
   const {tempAddress, tempBalance, tempSigningClient} = useTempClient()
   const [authZQueryClient, setAuthZQueryClient] = useState<QueryClient & AuthzExtension>()
   const [grants, setGrants] = useState<Grant[]>()
@@ -120,20 +109,39 @@ export const SignButton: FC<SignButtonProps> = () => {
 
 
     console.log(signingClient.registry)
+
+    const authorization = {
+      typeUrl: TRANSACTION_TYPE_ENUM.GenericAuthorization,
+      value: GenericAuthorization.encode(
+        GenericAuthorization.fromPartial({
+          msg: TRANSACTION_TYPE_ENUM.Send,
+        }),
+      ).finish(),
+    }
+
+    // const authorization = {
+    //   typeUrl: "/cosmos.bank.v1beta1.SendAuthorization",
+    //   value: SendAuthorization.encode(
+    //     SendAuthorization.fromPartial({
+    //       spendLimit: [
+    //         {
+    //           denom: 'ujunox',
+    //           amount: '1000',
+    //         }
+    //       ],
+    //     })
+    //   ).finish()
+    // }
+
     const msgGrant = {
-      typeUrl: '/cosmos.authz.v1beta1.MsgGrant', value: MsgGrant.fromPartial({
+      typeUrl: TRANSACTION_TYPE_ENUM.AuthZMsgGrant, value: MsgGrant.fromPartial({
         granter: address,
         grantee: tempAddress,
         grant: {
-          authorization: {
-            typeUrl: '/cosmos.authz.v1beta1.GenericAuthorization',
-            value: GenericAuthorization.encode(
-              GenericAuthorization.fromPartial({
-                msg: TRANSACTION_TYPE_ENUM.Send,
-                // msg: 'cosmos.bank.v1beta1.MsgSend',
-              }),
-            ).finish(),
-          },
+          authorization,
+          expiration: {
+            seconds: 99999999999
+          }
         },
       }),
     }
@@ -192,17 +200,32 @@ export const SignButton: FC<SignButtonProps> = () => {
           }}
         >FeeGrant</Button>
         <Button
-          onClick={() => {
+          onClick={async () => {
+            if (tempSigningClient && tempAddress) {
+
+              await tempSigningClient.sendTokens(tempAddress, address!, [{denom: 'ujunox', amount: '3'}], {
+                amount: [{denom: 'ujunox', amount: '250'}],
+                gas: '100000',
+              })
+
+              console.log("sent tokens normally")
+          }}}
+        >Send tokens</Button>
+        <Button
+          onClick={async () => {
             if (tempSigningClient && tempAddress) {
               console.log('tempSigningClient', tempSigningClient['aminoTypes'])
 
               /*
               Error: Broadcasting transaction failed with code 4 (codespace: sdk). Log: signature verification failed;
               please verify account number (56517), sequence (0) and chain-id (uni-6): unauthorized
-
                */
 
-              tempSigningClient.signAndBroadcast(tempAddress, [
+              const { accountNumber, sequence } = await tempSigningClient.getSequence(tempAddress);
+
+              console.log('tempAccount', tempAddress, accountNumber, sequence)
+
+              const authzTx = await tempSigningClient.signAndBroadcast(tempAddress, [
                 {
                   typeUrl: TRANSACTION_TYPE_ENUM.AuthZMsgExec,
                   value: MsgExec.fromPartial({
@@ -225,6 +248,8 @@ export const SignButton: FC<SignButtonProps> = () => {
                 amount: [{denom: 'ujunox', amount: '250'}],
                 gas: '100000',
               })
+
+              console.log('Completed the authz tx!')
             }
           }}
         >Send as temp</Button>

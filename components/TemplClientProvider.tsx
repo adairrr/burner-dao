@@ -1,7 +1,7 @@
 import createContext from '../utils/createContext'
 import { FC, PropsWithChildren, useEffect, useMemo, useState } from 'react'
 import { Registry, Secp256k1HdWallet } from 'cosmwasm'
-import { AminoTypes, Coin, GasPrice, SigningStargateClient } from '@cosmjs/stargate'
+import { AminoTypes, Coin, createBankAminoConverters, GasPrice, SigningStargateClient } from '@cosmjs/stargate'
 import { useLocalStorage } from 'usehooks-ts'
 import { GenericAuthorization } from 'cosmjs-types/cosmos/authz/v1beta1/authz'
 import { MsgExec, MsgGrant, MsgRevoke } from 'cosmjs-types/cosmos/authz/v1beta1/tx'
@@ -10,6 +10,7 @@ import { MsgGrantAllowance } from 'cosmjs-types/cosmos/feegrant/v1beta1/tx'
 import { createFeegrantAminoConverters } from '../utils/amino/feegrant'
 import { TRANSACTION_TYPE_ENUM } from '../utils/transactionTypes'
 import { MsgSend } from 'cosmjs-types/cosmos/bank/v1beta1/tx'
+import { SendAuthorization } from 'cosmjs-types/cosmos/bank/v1beta1/authz'
 
 interface Return {
   tempSigningClient: SigningStargateClient | undefined
@@ -19,11 +20,12 @@ interface Return {
 const [useTempClient, _TempClientProvider] = createContext<Return>('')
 
 export const AMINO_TYPES = new AminoTypes(
-  {...createAuthzAminoConverters(), ...createFeegrantAminoConverters()},
+  {...createAuthzAminoConverters(), ...createFeegrantAminoConverters(), ...createBankAminoConverters()},
 )
 
 export const REGISTRY = new Registry([
-  ['/cosmos.authz.v1beta1.GenericAuthorization', GenericAuthorization],
+  [TRANSACTION_TYPE_ENUM.GenericAuthorization, GenericAuthorization],
+  [TRANSACTION_TYPE_ENUM.SendAuthorization, SendAuthorization],
   ['/cosmos.authz.v1beta1.MsgGrant', MsgGrant],
   ['/cosmos.authz.v1beta1.MsgRevoke', MsgRevoke],
   [TRANSACTION_TYPE_ENUM.MsgGrantAllowance, MsgGrantAllowance],
@@ -31,12 +33,13 @@ export const REGISTRY = new Registry([
   [TRANSACTION_TYPE_ENUM.Send, MsgSend]
 ])
 
+export const JUNO_GAS_PRICE = GasPrice.fromString('0.0025ujuno')
+
 const TempClientProvider: FC<PropsWithChildren> = ({ children }) => {
   const [tempSigningClient, setTempSigningClient] = useState<SigningStargateClient>()
   const [tempAddress, setTempAddress] = useState<string>()
   const [tempBalance, setTempBalance] = useState<Coin>()
   const [localMnemonic, setLocalMnemonic] = useLocalStorage('mnemonic', '')
-
 
 
   useEffect(() => {
@@ -53,7 +56,7 @@ const TempClientProvider: FC<PropsWithChildren> = ({ children }) => {
 
 
         const tempSigningClient = await SigningStargateClient.connectWithSigner('https://rpc.testcosmos.directory/junotestnet', tempWallet, {
-          gasPrice: GasPrice.fromString('0.0025ujuno'),
+          gasPrice: JUNO_GAS_PRICE,
           // @ts-ignore
           registry: REGISTRY,
           aminoTypes: AMINO_TYPES
