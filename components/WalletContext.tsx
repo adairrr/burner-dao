@@ -2,7 +2,7 @@ import { FC, PropsWithChildren, useEffect, useMemo, useState } from 'react'
 import { GasPrice, SigningStargateClient } from '@cosmjs/stargate'
 import { useChain } from '@cosmos-kit/react'
 import { chainName } from '../config'
-import { AMINO_TYPES, JUNO_GAS_PRICE, REGISTRY } from './TemplClientProvider'
+import { AMINO_TYPES, JUNO_GAS_PRICE, REGISTRY } from './BurnerClientProvider'
 import { ExtendedHttpEndpoint } from '@cosmos-kit/core/types/types/manager'
 import createContext from '../utils/createContext'
 

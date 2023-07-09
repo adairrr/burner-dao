@@ -13,11 +13,11 @@ import { MsgSend } from 'cosmjs-types/cosmos/bank/v1beta1/tx'
 import { SendAuthorization } from 'cosmjs-types/cosmos/bank/v1beta1/authz'
 
 interface Return {
-  tempSigningClient: SigningStargateClient | undefined
-  tempAddress: string | undefined
-  tempBalance: Coin | undefined
+  burnerSigningClient: SigningStargateClient | undefined
+  burnerAddress: string | undefined
+  burnerBalance: Coin | undefined
 }
-const [useTempClient, _TempClientProvider] = createContext<Return>('')
+const [useBurnerClient, _BurnerClientProvider] = createContext<Return>('')
 
 export const AMINO_TYPES = new AminoTypes(
   {...createAuthzAminoConverters(), ...createFeegrantAminoConverters(), ...createBankAminoConverters()},
@@ -35,54 +35,55 @@ export const REGISTRY = new Registry([
 
 export const JUNO_GAS_PRICE = GasPrice.fromString('0.0025ujuno')
 
-const TempClientProvider: FC<PropsWithChildren> = ({ children }) => {
-  const [tempSigningClient, setTempSigningClient] = useState<SigningStargateClient>()
-  const [tempAddress, setTempAddress] = useState<string>()
-  const [tempBalance, setTempBalance] = useState<Coin>()
-  const [localMnemonic, setLocalMnemonic] = useLocalStorage('mnemonic', '')
+const BurnerClientProvider: FC<PropsWithChildren> = ({ children }) => {
+  const [burnerSigningClient, setBurnerSigningClient] = useState<SigningStargateClient>()
+  const [burnerAddress, setBurnerAddress] = useState<string>()
+  const [burnerBalance, setBurnerBalance] = useState<Coin>()
+  const [burnerMnemonic, setBurnerMnemonic] = useLocalStorage('mnemonic', '')
 
 
   useEffect(() => {
     ;(async function init() {
-      if (!tempSigningClient) {
+      if (!burnerSigningClient) {
 
-        let tempWallet
-        if (localMnemonic) {
-          tempWallet = await Secp256k1HdWallet.fromMnemonic(localMnemonic, { prefix: 'juno'})
+        let burnerWallet
+        if (burnerMnemonic) {
+          burnerWallet = await Secp256k1HdWallet.fromMnemonic(burnerMnemonic, { prefix: 'juno'})
         } else {
-          tempWallet = await Secp256k1HdWallet.generate(12, { prefix: 'juno'})
-          setLocalMnemonic(await tempWallet.mnemonic)
+          burnerWallet = await Secp256k1HdWallet.generate(12, { prefix: 'juno'})
+          setBurnerMnemonic(await burnerWallet.mnemonic)
         }
 
 
-        const tempSigningClient = await SigningStargateClient.connectWithSigner('https://rpc.testcosmos.directory/junotestnet', tempWallet, {
+        const tempSigningClient = await SigningStargateClient.connectWithSigner('https://rpc.testcosmos.directory/junotestnet', burnerWallet, {
           gasPrice: JUNO_GAS_PRICE,
           // @ts-ignore
           registry: REGISTRY,
           aminoTypes: AMINO_TYPES
         })
 
-        let accounts = await tempWallet.getAccounts()
-        setTempAddress(accounts[0].address)
+        let accounts = await burnerWallet.getAccounts()
+        setBurnerAddress(accounts[0].address)
 
-        setTempSigningClient(tempSigningClient)
+        setBurnerSigningClient(tempSigningClient)
 
-        setTempBalance(await tempSigningClient.getBalance(accounts[0].address, 'ujunox'))
+        setBurnerBalance(await tempSigningClient.getBalance(accounts[0].address, 'ujunox'))
       }
     })()
-  }, [localMnemonic, setLocalMnemonic, tempSigningClient])
+  }, [burnerMnemonic, setBurnerMnemonic, burnerSigningClient])
 
   const contextValue = useMemo<Return>(
     () => ({
-      tempSigningClient,
-      tempAddress,
-      tempBalance
+      burnerSigningClient: burnerSigningClient,
+      burnerAddress: burnerAddress,
+      burnerBalance: burnerBalance
     }),
-    [tempAddress, tempBalance, tempSigningClient]
+    [burnerAddress, burnerBalance, burnerSigningClient]
   )
 
-  return <_TempClientProvider value={contextValue}>{children}</_TempClientProvider>
+  return <_BurnerClientProvider value={contextValue}>{children}</_BurnerClientProvider>
 }
-
-export default useTempClient
-export { TempClientProvider }
+export {
+  useBurnerClient,
+  BurnerClientProvider
+}

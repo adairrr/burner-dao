@@ -1,6 +1,5 @@
 import React, { FC, useEffect, useState } from 'react'
 import { Button, HStack, Text, VStack } from '@chakra-ui/react'
-import useTempClient from './TemplClientProvider'
 import { MsgExec, MsgGrant } from 'cosmjs-types/cosmos/authz/v1beta1/tx'
 import { GenericAuthorization, Grant } from 'cosmjs-types/cosmos/authz/v1beta1/authz'
 import { Coin, QueryClient, setupAuthzExtension } from '@cosmjs/stargate'
@@ -14,6 +13,7 @@ import { Timestamp } from 'cosmjs-types/google/protobuf/timestamp'
 import { TRANSACTION_TYPE_ENUM } from '../utils/transactionTypes'
 import useWallet from './WalletContext'
 import { SendAuthorization } from 'cosmjs-types/cosmos/bank/v1beta1/authz'
+import { useBurnerClient } from './BurnerClientProvider'
 
 interface SignButtonProps {
 
@@ -56,7 +56,7 @@ const grantedMsg = '/cosmos.distribution.v1beta1.MsgWithdrawDelegatorReward'
 
 export const SignButton: FC<SignButtonProps> = () => {
   const {signingClient, rpcEndpoint, address, isWalletConnected, connect} = useWallet()
-  const {tempAddress, tempBalance, tempSigningClient} = useTempClient()
+  const {burnerAddress, burnerBalance, burnerSigningClient} = useBurnerClient()
   const [authZQueryClient, setAuthZQueryClient] = useState<QueryClient & AuthzExtension>()
   const [grants, setGrants] = useState<Grant[]>()
   const [granted, setGranted] = useState(false)
@@ -78,13 +78,13 @@ export const SignButton: FC<SignButtonProps> = () => {
 
   useEffect(() => {
     (async () => {
-      if (authZQueryClient && address && tempAddress) {
+      if (authZQueryClient && address && burnerAddress) {
         const {grants} = await
-          authZQueryClient.authz.granteeGrants(tempAddress)
+          authZQueryClient.authz.granteeGrants(burnerAddress)
         setGrants(grants)
       }
     })()
-  }, [address, authZQueryClient, tempAddress])
+  }, [address, authZQueryClient, burnerAddress])
 
 
   const authZCallback = async () => {
@@ -98,7 +98,7 @@ export const SignButton: FC<SignButtonProps> = () => {
       typeUrl: TRANSACTION_TYPE_ENUM.Send,
       value: MsgSend.fromPartial({
         fromAddress: address,
-        toAddress: tempAddress,
+        toAddress: burnerAddress,
         amount: [
           {
             denom: 'ujunox',
@@ -136,7 +136,7 @@ export const SignButton: FC<SignButtonProps> = () => {
     const msgGrant = {
       typeUrl: TRANSACTION_TYPE_ENUM.AuthZMsgGrant, value: MsgGrant.fromPartial({
         granter: address,
-        grantee: tempAddress,
+        grantee: burnerAddress,
         grant: {
           authorization,
           expiration: {
@@ -155,22 +155,16 @@ export const SignButton: FC<SignButtonProps> = () => {
       <VStack>
         {!isWalletConnected ? <Button onClick={connect}>Wallet Connected</Button> : <></>}
         <Button
-          onClick={() => {
-            try {
-              authZCallback()
-            } catch (error) {
-              console.log(error)
-            }
-          }
+          onClick={() => authZCallback().catch(e => console.log(e))
           }
         >
           Create Temp Wallet
         </Button>
         <HStack>
           <Text>Temp address</Text>
-          <Json data={tempAddress}/>
+          <Json data={burnerAddress}/>
         </HStack>
-        <Json data={tempBalance}/>
+        <Json data={burnerBalance}/>
         <HStack>
           <Text>Grants</Text>
           <Json data={grants}/>
@@ -185,7 +179,7 @@ export const SignButton: FC<SignButtonProps> = () => {
                   typeUrl: '/cosmos.feegrant.v1beta1.MsgGrantAllowance',
                   value: MsgGrantAllowance.fromPartial({
                     granter: address,
-                    grantee: tempAddress,
+                    grantee: burnerAddress,
                     allowance: setBasicAllowance({
                       spendLimit: [{denom: 'ujunox', amount: '100'}],
                     }),
@@ -201,42 +195,42 @@ export const SignButton: FC<SignButtonProps> = () => {
         >FeeGrant</Button>
         <Button
           onClick={async () => {
-            if (tempSigningClient && tempAddress) {
+            if (burnerSigningClient && burnerAddress) {
 
-              await tempSigningClient.sendTokens(tempAddress, address!, [{denom: 'ujunox', amount: '3'}], {
+              const tokenSend = await burnerSigningClient.sendTokens(burnerAddress, address!, [{denom: 'ujunox', amount: '3'}], {
                 amount: [{denom: 'ujunox', amount: '250'}],
                 gas: '100000',
               })
 
-              console.log("sent tokens normally")
+              console.log("sent tokens normally", tokenSend)
           }}}
         >Send tokens</Button>
         <Button
           onClick={async () => {
-            if (tempSigningClient && tempAddress) {
-              console.log('tempSigningClient', tempSigningClient['aminoTypes'])
+            if (burnerSigningClient && burnerAddress) {
+              console.log('tempSigningClient', burnerSigningClient['aminoTypes'])
 
               /*
               Error: Broadcasting transaction failed with code 4 (codespace: sdk). Log: signature verification failed;
               please verify account number (56517), sequence (0) and chain-id (uni-6): unauthorized
                */
 
-              const { accountNumber, sequence } = await tempSigningClient.getSequence(tempAddress);
+              const { accountNumber, sequence } = await burnerSigningClient.getSequence(burnerAddress);
 
-              console.log('tempAccount', tempAddress, accountNumber, sequence)
+              console.log('tempAccount', burnerAddress, accountNumber, sequence)
 
-              const authzTx = await tempSigningClient.signAndBroadcast(tempAddress, [
+              const authzTx = await burnerSigningClient.signAndBroadcast(burnerAddress, [
                 {
                   typeUrl: TRANSACTION_TYPE_ENUM.AuthZMsgExec,
                   value: MsgExec.fromPartial({
-                    grantee: tempAddress,
+                    grantee: burnerAddress,
                     msgs: [
                       // Send some funds from the logged in account to the temp address via authz
                       {
                         typeUrl: TRANSACTION_TYPE_ENUM.Send,
                         value: MsgSend.encode(MsgSend.fromPartial({
                           fromAddress: address,
-                          toAddress: tempAddress,
+                          toAddress: burnerAddress,
                           amount: [{denom: 'ujunox', amount: '3'}],
                         })).finish(),
                       },

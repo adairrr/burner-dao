@@ -8,7 +8,7 @@ import { wallets as leapWallets } from '@cosmos-kit/leap';
 
 import { SignerOptions } from '@cosmos-kit/core';
 import { chains, assets } from 'chain-registry';
-import { TempClientProvider } from '../components/TemplClientProvider'
+import { BurnerClientProvider } from '../components/BurnerClientProvider'
 import { GasPrice } from '@cosmjs/stargate'
 import { WalletProvider } from '../components/WalletContext'
 
@@ -110,9 +110,9 @@ function CreateCosmosApp({ Component, pageProps }: AppProps) {
         signerOptions={signerOptions}
       >
         <WalletProvider>
-        <TempClientProvider>
+        <BurnerClientProvider>
           <Component {...pageProps} />
-        </TempClientProvider>
+        </BurnerClientProvider>
         </WalletProvider>
       </ChainProvider>
     </ChakraProvider>
