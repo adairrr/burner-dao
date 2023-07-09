@@ -55,7 +55,8 @@ const WalletProvider: FC<PropsWithChildren> = ({ children }) => {
       address,
       connect,
       isWalletConnected,
-      rpcEndpoint
+      // TODO: don't hard-code
+      rpcEndpoint: 'https://uni-rpc.reece.sh'
     }),
     [address, connect, isWalletConnected, signingClient]
   )

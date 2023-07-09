@@ -1,6 +1,6 @@
 import createContext from '../utils/createContext'
 import { FC, PropsWithChildren, useEffect, useMemo, useState } from 'react'
-import { Registry, Secp256k1HdWallet } from 'cosmwasm'
+import { DirectSecp256k1HdWallet, Registry, Secp256k1HdWallet } from 'cosmwasm'
 import { AminoTypes, Coin, createBankAminoConverters, GasPrice, SigningStargateClient } from '@cosmjs/stargate'
 import { useLocalStorage } from 'usehooks-ts'
 import { GenericAuthorization } from 'cosmjs-types/cosmos/authz/v1beta1/authz'
@@ -11,6 +11,7 @@ import { createFeegrantAminoConverters } from '../utils/amino/feegrant'
 import { TRANSACTION_TYPE_ENUM } from '../utils/transactionTypes'
 import { MsgSend } from 'cosmjs-types/cosmos/bank/v1beta1/tx'
 import { SendAuthorization } from 'cosmjs-types/cosmos/bank/v1beta1/authz'
+import { createDefaultAminoConverters } from '@cosmjs/stargate/build/signingstargateclient'
 
 interface Return {
   burnerSigningClient: SigningStargateClient | undefined
@@ -20,7 +21,7 @@ interface Return {
 const [useBurnerClient, _BurnerClientProvider] = createContext<Return>('')
 
 export const AMINO_TYPES = new AminoTypes(
-  {...createAuthzAminoConverters(), ...createFeegrantAminoConverters(), ...createBankAminoConverters()},
+  {...createAuthzAminoConverters(), ...createFeegrantAminoConverters(), ...createBankAminoConverters(), ...createDefaultAminoConverters()},
 )
 
 export const REGISTRY = new Registry([
@@ -48,14 +49,14 @@ const BurnerClientProvider: FC<PropsWithChildren> = ({ children }) => {
 
         let burnerWallet
         if (burnerMnemonic) {
-          burnerWallet = await Secp256k1HdWallet.fromMnemonic(burnerMnemonic, { prefix: 'juno'})
+          burnerWallet = await DirectSecp256k1HdWallet.fromMnemonic(burnerMnemonic, { prefix: 'juno'})
         } else {
-          burnerWallet = await Secp256k1HdWallet.generate(12, { prefix: 'juno'})
+          burnerWallet = await DirectSecp256k1HdWallet.generate(24, { prefix: 'juno'})
           setBurnerMnemonic(await burnerWallet.mnemonic)
         }
 
 
-        const tempSigningClient = await SigningStargateClient.connectWithSigner('https://rpc.testcosmos.directory/junotestnet', burnerWallet, {
+        const tempSigningClient = await SigningStargateClient.connectWithSigner('https://uni-rpc.reece.sh', burnerWallet, {
           gasPrice: JUNO_GAS_PRICE,
           // @ts-ignore
           registry: REGISTRY,
@@ -67,10 +68,21 @@ const BurnerClientProvider: FC<PropsWithChildren> = ({ children }) => {
 
         setBurnerSigningClient(tempSigningClient)
 
-        setBurnerBalance(await tempSigningClient.getBalance(accounts[0].address, 'ujunox'))
+
       }
     })()
   }, [burnerMnemonic, setBurnerMnemonic, burnerSigningClient])
+
+  // set the balance every 5 seconds
+  useEffect(() => {
+    if (burnerSigningClient && burnerAddress) {
+      const interval = setInterval(async () => {
+        const balance = await burnerSigningClient.getBalance(burnerAddress, 'ujuno')
+        setBurnerBalance(balance)
+      }, 5000)
+      return () => clearInterval(interval)
+}
+  }, [burnerSigningClient, burnerAddress])
 
   const contextValue = useMemo<Return>(
     () => ({

@@ -54,6 +54,24 @@ export function setBasicAllowance({
 const grantedMsg = '/cosmos.distribution.v1beta1.MsgWithdrawDelegatorReward'
 
 
+function createMsgGrant(address: string, burnerAddress: string | undefined, authorization: {
+  typeUrl: TRANSACTION_TYPE_ENUM;
+  value: Uint8Array
+}) {
+  return {
+    typeUrl: TRANSACTION_TYPE_ENUM.AuthZMsgGrant, value: MsgGrant.fromPartial({
+      granter: address,
+      grantee: burnerAddress,
+      grant: {
+        authorization,
+        expiration: {
+          seconds: 99999999999,
+        },
+      },
+    }),
+  }
+}
+
 export const SignButton: FC<SignButtonProps> = () => {
   const {signingClient, rpcEndpoint, address, isWalletConnected, connect} = useWallet()
   const {burnerAddress, burnerBalance, burnerSigningClient} = useBurnerClient()
@@ -110,7 +128,7 @@ export const SignButton: FC<SignButtonProps> = () => {
 
     console.log(signingClient.registry)
 
-    const authorization = {
+    const genericAuthorization = {
       typeUrl: TRANSACTION_TYPE_ENUM.GenericAuthorization,
       value: GenericAuthorization.encode(
         GenericAuthorization.fromPartial({
@@ -119,34 +137,24 @@ export const SignButton: FC<SignButtonProps> = () => {
       ).finish(),
     }
 
-    // const authorization = {
-    //   typeUrl: "/cosmos.bank.v1beta1.SendAuthorization",
-    //   value: SendAuthorization.encode(
-    //     SendAuthorization.fromPartial({
-    //       spendLimit: [
-    //         {
-    //           denom: 'ujunox',
-    //           amount: '1000',
-    //         }
-    //       ],
-    //     })
-    //   ).finish()
-    // }
-
-    const msgGrant = {
-      typeUrl: TRANSACTION_TYPE_ENUM.AuthZMsgGrant, value: MsgGrant.fromPartial({
-        granter: address,
-        grantee: burnerAddress,
-        grant: {
-          authorization,
-          expiration: {
-            seconds: 99999999999
-          }
-        },
-      }),
+    const sendAuthorization = {
+      typeUrl: TRANSACTION_TYPE_ENUM.SendAuthorization,
+      value: SendAuthorization.encode(
+        SendAuthorization.fromPartial({
+          spendLimit: [
+            {
+              denom: 'ujunox',
+              amount: '1000',
+            }
+          ],
+        })
+      ).finish()
     }
 
-    const txResult = await signingClient.signAndBroadcast(address, [sendGas, msgGrant], 'auto')
+    const genericGrant = createMsgGrant(address, burnerAddress, genericAuthorization)
+    const sendGrant = createMsgGrant(address, burnerAddress, sendAuthorization)
+
+    const txResult = await signingClient.signAndBroadcast(address, [sendGas, sendGrant, genericGrant], 'auto')
     // trigger a rerender
     setGranted(true)
   }
@@ -219,6 +227,8 @@ export const SignButton: FC<SignButtonProps> = () => {
 
               console.log('tempAccount', burnerAddress, accountNumber, sequence)
 
+              console.log('getAccount', await burnerSigningClient.getAccount(burnerAddress))
+
               const authzTx = await burnerSigningClient.signAndBroadcast(burnerAddress, [
                 {
                   typeUrl: TRANSACTION_TYPE_ENUM.AuthZMsgExec,
@@ -226,6 +236,9 @@ export const SignButton: FC<SignButtonProps> = () => {
                     grantee: burnerAddress,
                     msgs: [
                       // Send some funds from the logged in account to the temp address via authz
+                      // {
+                      //   typeUrl: TRANSACTION_TYPE_ENUM.Delegate,
+                      // }
                       {
                         typeUrl: TRANSACTION_TYPE_ENUM.Send,
                         value: MsgSend.encode(MsgSend.fromPartial({
